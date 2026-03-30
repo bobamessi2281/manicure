@@ -112,7 +112,7 @@ def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="Готово — выбрать дату",
+                text="✅ Готово — выбрать дату",
                 callback_data="svc:done",
             )
         ]
@@ -515,7 +515,7 @@ async def confirm_submit(
     await state.clear()
     await message.answer(booking_sent(), reply_markup=client_main_kb())
     card = (
-        f"Новая заявка #{ap_id}\n"
+        f"🆕 Новая заявка #{ap_id}\n"
         f"{data['client_name']} · {phone_norm}\n"
         f"{format_dd_mm(day)} {format_hh_mm(st.astimezone(tz))}\n"
         f"{data['service_name']}"
@@ -536,7 +536,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"Принять #{aid}",
+                        text=f"✅ Принять #{aid}",
                         callback_data=f"rs:ok:{aid}",
                     ),
                     InlineKeyboardButton(
@@ -548,7 +548,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"Отменить #{aid}",
+                        text=f"🗑 Отменить #{aid}",
                         callback_data=f"cx:{aid}",
                     )
                 ]
@@ -557,7 +557,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"Отменить #{aid}",
+                        text=f"🗑 Отменить #{aid}",
                         callback_data=f"cx:{aid}",
                     )
                 ]

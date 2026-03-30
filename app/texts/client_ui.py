@@ -1,40 +1,41 @@
-"""Тексты для клиента: спокойный тон без лишних эмодзи."""
+"""Тексты для клиента: дружелюбно, с эмодзи умеренно (без перегруза)."""
 
 from __future__ import annotations
 
 import html
 
-# Кнопки reply-клавиатуры — совпадают с F.text в handlers
-BTN_BOOK = "Записаться"
-BTN_MY = "Мои записи"
-BTN_SHARE = "Поделиться контактом"
-BTN_SKIP = "Пропустить"
-BTN_CONFIRM = "Подтвердить"
-BTN_EDIT = "Изменить"
+# Кнопки reply-клавиатуры — совпадают с F.text в handlers (по одному эмодзи на кнопку)
+BTN_BOOK = "💅 Записаться"
+BTN_MY = "📋 Мои записи"
+BTN_SHARE = "📲 Поделиться контактом"
+BTN_SKIP = "⏭ Пропустить"
+BTN_CONFIRM = "✅ Подтвердить"
+BTN_EDIT = "✏️ Изменить"
 
 
 def start_welcome() -> str:
     return (
-        "Привет! Я помогу записаться к мастеру маникюра.\n\n"
+        "Привет! 💅\n\n"
+        "Помогу записаться к мастеру маникюра.\n\n"
         f"Выберите действие ниже или нажмите «{BTN_BOOK}»."
     )
 
 
 def start_admin_hint() -> str:
-    return "Админ-панель"
+    return "🔐 Админ-панель"
 
 
 def pick_services_intro() -> str:
     return (
         "Что делаем сегодня?\n"
-        "Можно выбрать несколько услуг — отметьте и нажмите «Готово — выбрать дату»."
+        "Можно выбрать несколько услуг — отметьте и нажмите «✅ Готово — выбрать дату»."
     )
 
 
 def pick_services_hint_selected(name: str, dur: int) -> str:
     return (
         f"Вы выбрали: {name}\n"
-        f"Всего по времени: {dur} мин\n\n"
+        f"По времени: {dur} мин\n\n"
         f"{pick_services_intro()}"
     )
 
@@ -47,7 +48,7 @@ def calendar_intro(service_name: str, dur: int) -> str:
     return (
         f"Услуги: {service_name}\n"
         f"{dur} мин\n\n"
-        "Выберите день — доступны только даты со свободными окнами."
+        "📅 Выберите день — видны только даты со свободными окнами."
     )
 
 
@@ -61,14 +62,14 @@ def ask_name() -> str:
 
 def ask_phone() -> str:
     return (
-        "Оставьте номер телефона — текстом или кнопкой ниже.\n"
-        "Мы свяжемся, если понадобится уточнить детали."
+        "📲 Оставьте номер — текстом или кнопкой ниже.\n"
+        "Если понадобится, мы уточним детали."
     )
 
 
 def ask_comment() -> str:
     return (
-        "Комментарий к записи (необязательно).\n"
+        "💬 Комментарий (необязательно).\n"
         "Например: форма ногтей, пожелания по цвету."
     )
 
@@ -82,11 +83,11 @@ def phone_invalid() -> str:
 
 
 def phone_empty() -> str:
-    return "Введите номер телефона текстом или поделитесь контактом."
+    return "Введите номер текстом или поделитесь контактом."
 
 
 def summary_title() -> str:
-    return "Проверьте заявку:"
+    return "✨ Проверьте заявку"
 
 
 def summary_body(
@@ -103,7 +104,7 @@ def summary_body(
         "",
         f"Услуги: {service_name}",
         f"{dur} мин",
-        f"Дата и время: {date_str} {time_str}",
+        f"📅 {date_str} {time_str}",
         f"Имя: {client_name}",
         f"Телефон: {phone_display}",
     ]
@@ -116,9 +117,9 @@ def summary_body(
 
 def booking_sent() -> str:
     return (
-        "Заявка отправлена.\n"
-        "Как только мастер подтвердит — мы напишем здесь.\n\n"
-        "Спасибо!"
+        "✅ Заявка отправлена.\n"
+        "Как только мастер подтвердит — напишем здесь.\n\n"
+        "Спасибо! 🤍"
     )
 
 
@@ -132,7 +133,7 @@ def slot_unavailable(reason: str) -> str:
 def phone_day_limit() -> str:
     return (
         "На этот день у вас уже максимум записей на этот номер.\n"
-        "Выберите другой день или начните сначала: /start"
+        "Выберите другой день или /start"
     )
 
 
@@ -146,12 +147,12 @@ def cmd_cancel_client() -> str:
 def no_records() -> str:
     return (
         "Пока нет активных записей.\n"
-        f"Чтобы записаться — нажмите «{BTN_BOOK}»."
+        f"Записаться — «{BTN_BOOK}»."
     )
 
 
 def my_records_header() -> str:
-    return "Ваши записи"
+    return "📋 Ваши записи"
 
 
 def record_line(ap_id: int, status: str, day_s: str, time_s: str, service: str) -> str:
@@ -163,20 +164,20 @@ def record_line(ap_id: int, status: str, day_s: str, time_s: str, service: str) 
 
 
 def record_reschedule_extra(day_s: str, time_s: str) -> str:
-    return f"\n   Предложен перенос: {day_s} {time_s}"
+    return f"\n   Перенос: {day_s} {time_s}"
 
 
 def cancelled_footer() -> str:
-    return "\n\nЗапись отменена."
+    return "\n\n✅ Запись отменена."
 
 
 def reschedule_accepted() -> str:
-    return "Перенос подтверждён. Ждём вас в назначенное время."
+    return "✅ Перенос подтверждён. Ждём вас в назначенное время."
 
 
 def reschedule_declined() -> str:
     return (
-        "Вы остались на прежнем времени.\n"
+        "Остаётесь на прежнем времени.\n"
         "Если что-то изменится — напишите."
     )
 
@@ -186,9 +187,9 @@ def reschedule_declined() -> str:
 
 def master_confirmed(ap_id: int, day_s: str, time_s: str) -> str:
     return (
-        f"Заявка #{ap_id} подтверждена.\n"
+        f"✅ Заявка #{ap_id} подтверждена.\n"
         f"{day_s} · {time_s}\n\n"
-        "До встречи!"
+        "До встречи! 💅"
     )
 
 
@@ -197,7 +198,7 @@ def master_rejected(ap_id: int, reason: str) -> str:
     return (
         f"Заявка #{ap_id} не подошла по расписанию.\n"
         f"Причина: {safe}\n\n"
-        "Вы можете записаться снова — будем рады помочь."
+        "Можно записаться снова — будем рады помочь 🤍"
     )
 
 
@@ -206,15 +207,15 @@ def master_cancelled(ap_id: int, reason: str) -> str:
     return (
         f"Запись #{ap_id} отменена мастером.\n"
         f"Причина: {safe}\n\n"
-        "Напишите, если нужно подобрать другое время."
+        "Напишите, если нужно другое время."
     )
 
 
 def master_propose_reschedule(ap_id: int, day_s: str, time_s: str) -> str:
     return (
-        f"Предлагаем перенести запись #{ap_id}\n"
+        f"🔁 Предлагаем перенести запись #{ap_id}\n"
         f"{day_s} · {time_s}\n\n"
-        "Нажмите кнопку ниже, если вам подходит."
+        "Если подходит — нажмите кнопку ниже."
     )
 
 
@@ -223,7 +224,7 @@ def master_propose_reschedule(ap_id: int, day_s: str, time_s: str) -> str:
 
 def reminder_hours_before(hours_before: int, day_s: str, time_s: str, service: str) -> str:
     return (
-        f"Напоминание: через {hours_before} ч запись.\n\n"
+        f"🔔 Напоминание: через {hours_before} ч запись.\n\n"
         f"{day_s} · {time_s}\n"
         f"{service}"
     )
