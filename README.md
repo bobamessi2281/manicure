@@ -37,21 +37,42 @@
 
 ## Railway
 
-1. Репозиторий на GitHub, проект на [Railway](https://railway.app) с подключением репозитория.
+**В репозиторий не коммить** `.env` (токен и ID только в переменных Railway).
 
-2. Переменные окружения: те же, что в `.env` (`BOT_TOKEN`, `OWNER_TG_ID`, …).
+### 1. GitHub
 
-3. **Start command** (или `Procfile`):
+Создайте пустой репозиторий на GitHub, затем в каталоге проекта:
 
-   ```bash
-   python -m app.main
-   ```
+```bash
+git remote add origin https://github.com/ВАШ_ЛОГИН/ИМЯ_РЕПО.git
+git branch -M main
+git push -u origin main
+```
 
-4. Диск: для сохранения SQLite между деплоями подключите **Volume** и укажите путь, например:
+(или SSH: `git@github.com:ВАШ_ЛОГИН/ИМЯ_РЕПО.git`)
 
-   - `DATABASE_PATH=/data/database.db`
+### 2. Проект на Railway
 
-   и смонтируйте том в `/data`.
+1. [Railway](https://railway.app) → **New Project** → **Deploy from GitHub repo** → выберите репозиторий.
+2. Вкладка **Variables** — добавьте:
+
+| Переменная       | Пример / описание |
+|------------------|-------------------|
+| `BOT_TOKEN`      | токен от @BotFather |
+| `OWNER_TG_ID`    | ваш числовой Telegram ID |
+| `TIMEZONE`       | `Europe/Moscow` (опционально) |
+| `DATABASE_PATH`  | см. ниже про том |
+
+3. **Start command** задаётся в `railway.toml` и `Procfile`: `python -m app.main`.
+
+### 3. SQLite и том
+
+Без постоянного диска файл БД пропадёт при перезапуске. В Railway:
+
+1. Добавьте **Volume**, смонтируйте, например, в `/data`.
+2. Установите переменную: `DATABASE_PATH=/data/database.db`.
+
+Локально по умолчанию используется `database.db` в корне (см. `.env.example`).
 
 ## Команды (OWNER)
 
@@ -64,6 +85,7 @@
 manicure/
 ├── .env.example
 ├── Procfile
+├── railway.toml
 ├── README.md
 ├── requirements.txt
 ├── runtime.txt
