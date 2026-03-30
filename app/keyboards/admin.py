@@ -79,10 +79,10 @@ def proposal_client_kb(appt_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🩷 Принять", callback_data=f"rs:ok:{aid}"
+                    text="Принять", callback_data=f"rs:ok:{aid}"
                 ),
                 InlineKeyboardButton(
-                    text="🤍 Отказаться", callback_data=f"rs:no:{aid}"
+                    text="Отказаться", callback_data=f"rs:no:{aid}"
                 ),
             ],
         ]

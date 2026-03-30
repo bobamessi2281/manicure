@@ -100,11 +100,11 @@ def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
     for i, s in enumerate(SERVICES):
         nm = str(s["name"])[:40]
         dm = int(s["duration_minutes"])
-        mark = "🩷" if i in selected else "🤍"
+        prefix = "[+]" if i in selected else "[ ]"
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{mark} {nm} · {dm} мин",
+                    text=f"{prefix} {nm} · {dm} мин",
                     callback_data=f"svc:t:{i}",
                 )
             ]
@@ -112,7 +112,7 @@ def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="✨ Готово — к дате",
+                text="Готово — выбрать дату",
                 callback_data="svc:done",
             )
         ]
@@ -241,13 +241,13 @@ async def svc_done(
     sel = set(data.get("selected_svc", []))
     if not sel:
         await cq.answer(
-            "🌸 Отметьте хотя бы одну услугу.", show_alert=True
+            "Отметьте хотя бы одну услугу.", show_alert=True
         )
         return
     name, dur = _format_services_selection(sel)
     if dur <= 0:
         await cq.answer(
-            "🤍 Что-то не так с длительностью — попробуйте снова.",
+            "Некорректная длительность — попробуйте снова.",
             show_alert=True,
         )
         return
@@ -317,16 +317,14 @@ async def cal_day(
     day = date(y, mo, d)
     tz = _tz()
     if not date_in_booking_window(day, tz):
-        await cq.answer(
-            "🤍 Эта дата пока недоступна.", show_alert=True
-        )
+        await cq.answer("Эта дата недоступна.", show_alert=True)
         return
     data = await state.get_data()
     dur = int(data["duration_minutes"])
     slots = await available_start_times(db, day, dur, tz)
     if not slots:
         await cq.answer(
-            "🥺 На этот день местечек не осталось.", show_alert=True
+            "На этот день нет свободных слотов.", show_alert=True
         )
         return
     await state.update_data(day_iso=day.isoformat())
@@ -517,7 +515,7 @@ async def confirm_submit(
     await state.clear()
     await message.answer(booking_sent(), reply_markup=client_main_kb())
     card = (
-        f"🆕 Новая заявка #{ap_id}\n"
+        f"Новая заявка #{ap_id}\n"
         f"{data['client_name']} · {phone_norm}\n"
         f"{format_dd_mm(day)} {format_hh_mm(st.astimezone(tz))}\n"
         f"{data['service_name']}"
@@ -538,11 +536,11 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"🩷 Принять #{aid}",
+                        text=f"Принять #{aid}",
                         callback_data=f"rs:ok:{aid}",
                     ),
                     InlineKeyboardButton(
-                        text=f"🤍 Отказаться #{aid}",
+                        text=f"Отказаться #{aid}",
                         callback_data=f"rs:no:{aid}",
                     ),
                 ]
@@ -550,7 +548,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"🥀 Отменить #{aid}",
+                        text=f"Отменить #{aid}",
                         callback_data=f"cx:{aid}",
                     )
                 ]
@@ -559,7 +557,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"🥀 Отменить #{aid}",
+                        text=f"Отменить #{aid}",
                         callback_data=f"cx:{aid}",
                     )
                 ]
@@ -618,7 +616,7 @@ async def client_cancel(
     await db.update_status(
         ap_id, "CANCELLED", admin_reason="отмена клиентом", clear_proposed=True
     )
-    await cq.answer("🤍 Готово")
+    await cq.answer("Готово")
     prev = (cq.message.text or "").strip()
     try:
         await cq.message.edit_text(
