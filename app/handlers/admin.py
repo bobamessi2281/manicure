@@ -29,7 +29,7 @@ from app.texts.client_ui import (
     master_propose_reschedule,
     master_rejected,
 )
-from app.utils.time import format_dd_mm, moscow_today, parse_iso
+from app.utils.time import format_day_month_ru, moscow_today, parse_iso
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
@@ -127,7 +127,7 @@ async def adm_all_list(cq: CallbackQuery, db: Database) -> None:
     for ap in rows[:40]:
         st = parse_iso(ap.start_at).astimezone(tz)
         lines.append(
-            f"#{ap.id} · {ap.status} · {format_dd_mm(st.date())} {format_hh_mm(st)} · "
+            f"#{ap.id} · {ap.status} · {format_day_month_ru(st.date())} {format_hh_mm(st)} · "
             f"{ap.client_name} · {ap.service_name} ({ap.duration_minutes} мин)"
         )
         kb_rows.append(
@@ -175,7 +175,7 @@ async def ap_confirm(
         ap.client_tg_id,
         master_confirmed(
             ap_id,
-            format_dd_mm(st.astimezone(z).date()),
+            format_day_month_ru(st.astimezone(z).date()),
             format_hh_mm(st.astimezone(z)),
         ),
     )
@@ -264,7 +264,7 @@ async def rs_day_ad(
         return
     await state.update_data(rs_day_iso=day.isoformat())
     await cq.message.answer(
-        f"Время на {format_dd_mm(day)}:",
+        f"Время на {format_day_month_ru(day)}:",
         reply_markup=_admin_slots_kb(day, slots),
     )
     await cq.answer()
@@ -307,7 +307,7 @@ async def rs_pick_at(
         ap.client_tg_id,
         master_propose_reschedule(
             ap_id,
-            format_dd_mm(pst.date()),
+            format_day_month_ru(pst.date()),
             format_hh_mm(pst),
         ),
         proposal_client_kb(ap_id),

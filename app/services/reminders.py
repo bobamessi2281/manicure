@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.repository import Database
 from app.texts.client_ui import reminder_hours_before
-from app.utils.time import format_dd_mm, parse_iso
+from app.utils.time import format_day_month_ru, parse_iso
 from zoneinfo import ZoneInfo
 
 
@@ -34,7 +34,7 @@ async def _send_reminder(
     d = st.date()
     text = reminder_hours_before(
         hours_before,
-        format_dd_mm(d),
+        format_day_month_ru(d),
         st.strftime("%H:%M"),
         ap.service_name,
     )

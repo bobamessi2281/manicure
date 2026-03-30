@@ -140,12 +140,12 @@ def format_hh_mm(dt: datetime) -> str:
 def appointment_card_text(ap: AppointmentRow, tz_name: str) -> str:
     st = parse_iso(ap.start_at).astimezone(ZoneInfo(tz_name))
     et = parse_iso(ap.end_at).astimezone(ZoneInfo(tz_name))
-    from app.utils.time import format_dd_mm
+    from app.utils.time import format_day_month_ru
 
     d = st.date()
     lines = [
         f"#{ap.id} · {ap.status}",
-        f"📅 {format_dd_mm(d)} · {format_hh_mm(st)}–{format_hh_mm(et)}",
+        f"📅 {format_day_month_ru(d)} · {format_hh_mm(st)}–{format_hh_mm(et)}",
         f"💅 {ap.service_name} ({ap.duration_minutes} мин)",
         f"👤 {ap.client_name} · 📞 {ap.client_phone_norm}",
     ]

@@ -18,7 +18,30 @@ def combine_moscow(d: date, hour: int, minute: int, tz_name: str) -> datetime:
 
 
 def format_dd_mm(d: date) -> str:
+    """Устаревший формат «31 03» — предпочтительнее format_day_month_ru."""
     return f"{d.day:02d} {d.month:02d}"
+
+
+_MONTHS_GENITIVE_RU = (
+    "",
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+)
+
+
+def format_day_month_ru(d: date) -> str:
+    """Человекочитаемо: «31 марта»."""
+    return f"{d.day} {_MONTHS_GENITIVE_RU[d.month]}"
 
 
 def days_in_month(year: int, month: int) -> int:

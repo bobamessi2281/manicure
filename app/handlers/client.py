@@ -65,7 +65,7 @@ from app.services.scheduling import (
     format_hh_mm,
     slot_is_free,
 )
-from app.utils.time import format_dd_mm, moscow_today, parse_iso
+from app.utils.time import format_day_month_ru, moscow_today, parse_iso
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -99,9 +99,9 @@ def _format_services_selection(selected: set[int]) -> tuple[str, int]:
 def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for i, s in enumerate(SERVICES):
-        nm = str(s["name"])[:38]
+        nm = str(s["name"])[:36]
         dm = int(s["duration_minutes"])
-        mark = "🩷" if i in selected else "🤍"
+        mark = "✅" if i in selected else "⬜"
         rows.append(
             [
                 InlineKeyboardButton(
@@ -335,7 +335,7 @@ async def cal_day(
         cq.bot,
         cq.message.chat.id,
         mid,
-        time_pick_intro(data["service_name"], format_dd_mm(day)),
+        time_pick_intro(data["service_name"], format_day_month_ru(day)),
         _slots_kb(day, slots),
     )
     await cq.answer()
@@ -434,7 +434,7 @@ async def _show_summary(message: Message, state: FSMContext) -> None:
     if st.tzinfo is None:
         st = st.replace(tzinfo=tz)
     day = st.date()
-    dstr = format_dd_mm(day)
+    dstr = format_day_month_ru(day)
     tstr = format_hh_mm(st.astimezone(tz))
     phone = normalize_phone(data.get("phone_raw", ""))
     text = summary_body(
@@ -518,7 +518,7 @@ async def confirm_submit(
     card = (
         f"🆕 Новая заявка #{ap_id}\n"
         f"{data['client_name']} · {phone_norm}\n"
-        f"{format_dd_mm(day)} {format_hh_mm(st.astimezone(tz))}\n"
+        f"{format_day_month_ru(day)} {format_hh_mm(st.astimezone(tz))}\n"
         f"{data['service_name']}"
     )
     await _notify_admins(
@@ -585,14 +585,14 @@ async def my_records(
         line = record_line(
             ap.id,
             ap.status,
-            format_dd_mm(st.date()),
+            format_day_month_ru(st.date()),
             format_hh_mm(st),
             ap.service_name,
         )
         if ap.status == "RESCHEDULE_PROPOSED" and ap.proposed_start_at:
             pst = parse_iso(ap.proposed_start_at).astimezone(tz)
             line += record_reschedule_extra(
-                format_dd_mm(pst.date()),
+                format_day_month_ru(pst.date()),
                 format_hh_mm(pst),
             )
         lines.append(line)
@@ -631,7 +631,7 @@ async def client_cancel(
     text = (
         f"Клиент отменил запись #{ap_id}\n"
         f"{ap.client_name} · {ap.client_phone_norm}\n"
-        f"{format_dd_mm(st.date())} {format_hh_mm(st)}"
+        f"{format_day_month_ru(st.date())} {format_hh_mm(st)}"
     )
     await _notify_admins(cq.bot, db, text)
     await resync_reminder_jobs_async(
