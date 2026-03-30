@@ -8,71 +8,61 @@
 - Напоминания **за 24 ч и 12 ч** только для **CONFIRMED**.
 - Не больше **2** записей на **один нормализованный телефон** в **календарный день по Москве**.
 - Рабочие часы **11:00–20:00**, запись на **30 дней** вперёд, слоты с шагом **15** минут.
-- Админы: **OWNER** в `.env`, остальные через `/addadmin` / `/deladmin` (по **tg_id**).
+- Админы: **OWNER** в переменных окружения, остальные через `/addadmin` / `/deladmin` (по **tg_id**).
 
-## Локальный запуск
+## Как пользоваться ботом (без терминала на Mac)
 
-1. Python **3.11+** (рекомендуется).
+**Рабочий режим:** бот крутится в **Railway**, вы общаетесь с ним только в **Telegram**. На Mac не нужно ничего запускать вручную в Terminal.
 
-2. Скопируйте окружение:
+1. Залейте код на **GitHub** (удобно через [GitHub Desktop](https://desktop.github.com/) — без команд в терминале).
+2. В [Railway](https://railway.app) подключите репозиторий и задайте переменные (см. ниже).
+3. После деплоя откройте бота в Telegram и нажмите **/start**.
 
-   ```bash
-   cp .env.example .env
-   ```
+Секреты (`BOT_TOKEN`, `OWNER_TG_ID`) только в **Railway → Variables** и в **`.env` локально** (файл `.env` в git не коммитится).
 
-3. Заполните в `.env`:
+---
 
-   - `BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather)
-   - `OWNER_TG_ID` — числовой Telegram ID владельца (можно узнать у [@userinfobot](https://t.me/userinfobot))
-   - при необходимости `DATABASE_PATH`, `TIMEZONE`
+## Запуск в Railway (основной способ)
 
-4. Установка зависимостей и запуск:
+**В репозиторий не коммить** `.env`.
 
-   ```bash
-   pip install -r requirements.txt
-   python -m app.main
-   ```
+### Код на GitHub
 
-При первом запуске создаётся файл БД (по умолчанию `database.db`) и таблицы.
+- Репозиторий можно создать и загрузить файлы через **веб-интерфейс GitHub** или **GitHub Desktop** (без `git` в терминале, если так удобнее).
 
-## Railway
-
-**В репозиторий не коммить** `.env` (токен и ID только в переменных Railway).
-
-### 1. GitHub
-
-Создайте пустой репозиторий на GitHub, затем в каталоге проекта:
-
-```bash
-git remote add origin https://github.com/ВАШ_ЛОГИН/ИМЯ_РЕПО.git
-git branch -M main
-git push -u origin main
-```
-
-(или SSH: `git@github.com:ВАШ_ЛОГИН/ИМЯ_РЕПО.git`)
-
-### 2. Проект на Railway
+### Проект на Railway
 
 1. [Railway](https://railway.app) → **New Project** → **Deploy from GitHub repo** → выберите репозиторий.
 2. Вкладка **Variables** — добавьте:
 
-| Переменная       | Пример / описание |
-|------------------|-------------------|
+| Переменная       | Описание |
+|------------------|----------|
 | `BOT_TOKEN`      | токен от @BotFather |
 | `OWNER_TG_ID`    | ваш числовой Telegram ID |
 | `TIMEZONE`       | `Europe/Moscow` (опционально) |
 | `DATABASE_PATH`  | см. ниже про том |
 
-3. **Start command** задаётся в `railway.toml` и `Procfile`: `python -m app.main`.
+3. **Start command** уже задан в `railway.toml` и `Procfile`: `python -m app.main`.
 
-### 3. SQLite и том
+### SQLite и том
 
 Без постоянного диска файл БД пропадёт при перезапуске. В Railway:
 
 1. Добавьте **Volume**, смонтируйте, например, в `/data`.
 2. Установите переменную: `DATABASE_PATH=/data/database.db`.
 
-Локально по умолчанию используется `database.db` в корне (см. `.env.example`).
+---
+
+## Опционально: локальный запуск на компьютере
+
+Нужен только если вы **разрабатываете** бота и хотите гонять его на своей машине. Обычно для работы салона это не требуется.
+
+1. Python **3.11+**, `cp .env.example .env`, заполните `BOT_TOKEN`, `OWNER_TG_ID`.
+2. `pip install -r requirements.txt` и `python -m app.main` (или запуск из IDE).
+
+При первом запуске создаётся `database.db` (если не задан другой путь).
+
+---
 
 ## Команды (OWNER)
 
