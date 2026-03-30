@@ -169,7 +169,7 @@ async def _safe_edit_text(
     message_id: int,
     text: str,
     reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | None = None,
-) -> None:
+) -> bool:
     try:
         await bot.edit_message_text(
             text,
@@ -177,8 +177,9 @@ async def _safe_edit_text(
             message_id=message_id,
             reply_markup=reply_markup,
         )
+        return True
     except Exception:
-        pass
+        return False
 
 
 async def _notify_admins(
@@ -217,6 +218,7 @@ async def cmd_start(
 
 @router.message(F.text == BTN_BOOK)
 async def book_start(message: Message, state: FSMContext) -> None:
+    await state.clear()
     await state.set_state(ClientBooking.service)
     await state.update_data(selected_svc=[])
     msg = await message.answer(
@@ -277,23 +279,28 @@ async def svc_done(
         )
         return
     await state.update_data(service_name=name, duration_minutes=dur)
-    await state.set_state(ClientBooking.calendar)
     tz = _tz()
     today = moscow_today(tz)
     first, last = allowed_booking_dates(tz)
     y, m = today.year, today.month
     avail = await available_booking_dates_in_month(db, y, m, dur, tz)
     mid = int(data.get("ui_msg_id") or cq.message.message_id)
-    await _safe_edit_text(
+    cal_kb = month_calendar_kb(
+        y, m, today, first, last,
+        available_dates=avail,
+    )
+    intro = calendar_intro(name, dur)
+    ok = await _safe_edit_text(
         cq.bot,
         cq.message.chat.id,
         mid,
-        calendar_intro(name, dur),
-        month_calendar_kb(
-            y, m, today, first, last,
-            available_dates=avail,
-        ),
+        intro,
+        cal_kb,
     )
+    if not ok:
+        msg = await cq.message.answer(intro, reply_markup=cal_kb)
+        await state.update_data(ui_msg_id=msg.message_id)
+    await state.set_state(ClientBooking.calendar)
     await cq.answer()
 
 
@@ -353,15 +360,20 @@ async def cal_day(
         )
         return
     await state.update_data(day_iso=day.isoformat())
-    await state.set_state(ClientBooking.time_pick)
     mid = int(data.get("ui_msg_id") or cq.message.message_id)
-    await _safe_edit_text(
+    slots_kb = _slots_kb(day, slots)
+    intro = time_pick_intro(data["service_name"], format_day_month_ru(day))
+    ok = await _safe_edit_text(
         cq.bot,
         cq.message.chat.id,
         mid,
-        time_pick_intro(data["service_name"], format_day_month_ru(day)),
-        _slots_kb(day, slots),
+        intro,
+        slots_kb,
     )
+    if not ok:
+        msg = await cq.message.answer(intro, reply_markup=slots_kb)
+        await state.update_data(ui_msg_id=msg.message_id)
+    await state.set_state(ClientBooking.time_pick)
     await cq.answer()
 
 
@@ -390,23 +402,32 @@ async def pick_time(
     if prof is not None:
         raw = prof.phone_raw or prof.client_phone_norm
         await state.update_data(client_name=prof.client_name, phone_raw=raw)
-        await state.set_state(ClientBooking.comment)
-        await _safe_edit_text(
+        ok = await _safe_edit_text(
             cq.bot,
             cq.message.chat.id,
             mid,
             ask_comment(),
             reply_markup=skip_comment_kb(),
         )
+        if not ok:
+            msg = await cq.message.answer(
+                ask_comment(),
+                reply_markup=skip_comment_kb(),
+            )
+            await state.update_data(ui_msg_id=msg.message_id)
+        await state.set_state(ClientBooking.comment)
     else:
-        await state.set_state(ClientBooking.name)
-        await _safe_edit_text(
+        ok = await _safe_edit_text(
             cq.bot,
             cq.message.chat.id,
             mid,
             ask_name(),
             reply_markup=None,
         )
+        if not ok:
+            msg = await cq.message.answer(ask_name())
+            await state.update_data(ui_msg_id=msg.message_id)
+        await state.set_state(ClientBooking.name)
     await cq.answer()
 
 
