@@ -79,10 +79,10 @@ def proposal_client_kb(appt_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Принять", callback_data=f"rs:ok:{aid}"
+                    text="🩷 Принять", callback_data=f"rs:ok:{aid}"
                 ),
                 InlineKeyboardButton(
-                    text="Отказаться", callback_data=f"rs:no:{aid}"
+                    text="🤍 Отказаться", callback_data=f"rs:no:{aid}"
                 ),
             ],
         ]
@@ -96,15 +96,15 @@ def proposal_with_cancel_kb(appt_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Принять", callback_data=f"rs:ok:{aid}"
+                    text="🩷 Принять", callback_data=f"rs:ok:{aid}"
                 ),
                 InlineKeyboardButton(
-                    text="❌ Отказаться", callback_data=f"rs:no:{aid}"
+                    text="🤍 Отказаться", callback_data=f"rs:no:{aid}"
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="❌ Отменить запись", callback_data=f"cx:{aid}"
+                    text="🥀 Отменить запись", callback_data=f"cx:{aid}"
                 ),
             ],
         ]

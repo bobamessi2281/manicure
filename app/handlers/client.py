@@ -28,6 +28,7 @@ from app.texts.client_ui import (
     BTN_EDIT,
     BTN_MY,
     BTN_SKIP,
+    INLINE_SVC_DONE,
     ask_comment,
     ask_name,
     ask_phone,
@@ -98,13 +99,13 @@ def _format_services_selection(selected: set[int]) -> tuple[str, int]:
 def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for i, s in enumerate(SERVICES):
-        nm = str(s["name"])[:40]
+        nm = str(s["name"])[:38]
         dm = int(s["duration_minutes"])
-        prefix = "[+]" if i in selected else "[ ]"
+        mark = "🩷" if i in selected else "🤍"
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{prefix} {nm} · {dm} мин",
+                    text=f"{mark} {nm} · {dm} мин",
                     callback_data=f"svc:t:{i}",
                 )
             ]
@@ -112,7 +113,7 @@ def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="✅ Готово — выбрать дату",
+                text=INLINE_SVC_DONE,
                 callback_data="svc:done",
             )
         ]
@@ -241,13 +242,13 @@ async def svc_done(
     sel = set(data.get("selected_svc", []))
     if not sel:
         await cq.answer(
-            "Отметьте хотя бы одну услугу.", show_alert=True
+            "🌸 Отметьте хотя бы одну услугу.", show_alert=True
         )
         return
     name, dur = _format_services_selection(sel)
     if dur <= 0:
         await cq.answer(
-            "Некорректная длительность — попробуйте снова.",
+            "🤍 Некорректная длительность — попробуйте снова.",
             show_alert=True,
         )
         return
@@ -317,14 +318,14 @@ async def cal_day(
     day = date(y, mo, d)
     tz = _tz()
     if not date_in_booking_window(day, tz):
-        await cq.answer("Эта дата недоступна.", show_alert=True)
+        await cq.answer("🤍 Эта дата пока недоступна.", show_alert=True)
         return
     data = await state.get_data()
     dur = int(data["duration_minutes"])
     slots = await available_start_times(db, day, dur, tz)
     if not slots:
         await cq.answer(
-            "На этот день нет свободных слотов.", show_alert=True
+            "🥺 На этот день свободных слотов нет.", show_alert=True
         )
         return
     await state.update_data(day_iso=day.isoformat())
@@ -536,11 +537,11 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"✅ Принять #{aid}",
+                        text=f"🩷 Принять #{aid}",
                         callback_data=f"rs:ok:{aid}",
                     ),
                     InlineKeyboardButton(
-                        text=f"Отказаться #{aid}",
+                        text=f"🤍 Отказаться #{aid}",
                         callback_data=f"rs:no:{aid}",
                     ),
                 ]
@@ -548,7 +549,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"🗑 Отменить #{aid}",
+                        text=f"🥀 Отменить #{aid}",
                         callback_data=f"cx:{aid}",
                     )
                 ]
@@ -557,7 +558,7 @@ def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
             ib.append(
                 [
                     InlineKeyboardButton(
-                        text=f"🗑 Отменить #{aid}",
+                        text=f"🥀 Отменить #{aid}",
                         callback_data=f"cx:{aid}",
                     )
                 ]
@@ -616,7 +617,7 @@ async def client_cancel(
     await db.update_status(
         ap_id, "CANCELLED", admin_reason="отмена клиентом", clear_proposed=True
     )
-    await cq.answer("Готово")
+    await cq.answer("🤍 Готово")
     prev = (cq.message.text or "").strip()
     try:
         await cq.message.edit_text(
