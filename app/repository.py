@@ -437,6 +437,22 @@ class Database:
             rows = await cur.fetchall()
             return [_row_to_appt(r) for r in rows]
 
+    async def list_upcoming_appointments_all(self) -> list[AppointmentRow]:
+        """Все будущие записи/заявки (для админа, без фильтра по дате)."""
+        now = _dt_to_utc_z(datetime.now(timezone.utc))
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT * FROM appointments
+                WHERE end_at > ? AND status NOT IN ('CANCELLED', 'DECLINED')
+                ORDER BY start_at
+                """,
+                (now,),
+            )
+            rows = await cur.fetchall()
+            return [_row_to_appt(r) for r in rows]
+
     async def list_confirmed_future_for_reminders(self) -> list[AppointmentRow]:
         now = _dt_to_utc_z(datetime.now(timezone.utc))
         async with aiosqlite.connect(self.path) as db:

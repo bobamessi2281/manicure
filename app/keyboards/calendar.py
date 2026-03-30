@@ -45,10 +45,12 @@ def month_calendar_kb(
     last_allowed: date,
     nav_prefix: str = "cm",
     day_prefix: str = "cd",
+    available_dates: set[date] | None = None,
 ) -> InlineKeyboardMarkup:
     """Inline-календарь: дни 1..31, навигация ◀️/▶️.
 
     nav_prefix/day_prefix — префиксы callback (клиент: cm/cd, админ: am/ad).
+    Если задано available_dates — кликабельны только эти даты (остальные в окне — «·»).
     """
     mk = _month_key(year, month)
     prev_y, prev_m = _shift_month(year, month, -1)
@@ -82,6 +84,10 @@ def month_calendar_kb(
                 continue
             label = str(d.day)
             if d < first_allowed or d > last_allowed:
+                row.append(
+                    InlineKeyboardButton(text=f"·{label}", callback_data=noop)
+                )
+            elif available_dates is not None and d not in available_dates:
                 row.append(
                     InlineKeyboardButton(text=f"·{label}", callback_data=noop)
                 )

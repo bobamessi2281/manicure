@@ -6,6 +6,7 @@ from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.repository import Database
+from app.texts.client_ui import reminder_hours_before
 from app.utils.time import format_dd_mm, parse_iso
 from zoneinfo import ZoneInfo
 
@@ -31,10 +32,11 @@ async def _send_reminder(
 
     st = parse_iso(ap.start_at).astimezone(ZoneInfo(tz_name))
     d = st.date()
-    text = (
-        f"🔔 Напоминание: через {hours_before} ч запись.\n"
-        f"📅 {format_dd_mm(d)} в {st.strftime('%H:%M')}\n"
-        f"💅 {ap.service_name}"
+    text = reminder_hours_before(
+        hours_before,
+        format_dd_mm(d),
+        st.strftime("%H:%M"),
+        ap.service_name,
     )
     try:
         await bot.send_message(ap.client_tg_id, text)

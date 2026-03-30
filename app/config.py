@@ -40,10 +40,13 @@ def load_settings() -> Settings:
     )
 
 
-# Услуги: редактируйте названия и длительность здесь
+# Услуги: редактируйте названия и длительность здесь (клиент может выбрать несколько)
 SERVICES: list[dict[str, object]] = [
     {"name": "Маникюр классический", "duration_minutes": 60},
+    {"name": "Покрытие гель-лак", "duration_minutes": 45},
     {"name": "Маникюр + покрытие", "duration_minutes": 90},
+    {"name": "Наращивание", "duration_minutes": 120},
+    {"name": "Педикюр", "duration_minutes": 75},
     {"name": "Маникюр + дизайн", "duration_minutes": 120},
     {"name": "Комплекс (руки+ноги)", "duration_minutes": 180},
 ]

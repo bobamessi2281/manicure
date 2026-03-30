@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -109,6 +110,26 @@ async def available_start_times(
         if ok:
             out.append(t)
         t += step
+    return out
+
+
+async def available_booking_dates_in_month(
+    db: Database,
+    year: int,
+    month: int,
+    duration_minutes: int,
+    tz_name: str,
+) -> set[date]:
+    """Дни месяца, где есть хотя бы один свободный слот под суммарную длительность."""
+    last_d = calendar.monthrange(year, month)[1]
+    out: set[date] = set()
+    for day_n in range(1, last_d + 1):
+        d = date(year, month, day_n)
+        if not date_in_booking_window(d, tz_name):
+            continue
+        slots = await available_start_times(db, d, duration_minutes, tz_name)
+        if slots:
+            out.add(d)
     return out
 
 

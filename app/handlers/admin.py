@@ -23,6 +23,12 @@ from app.services.scheduling import (
     format_hh_mm,
     slot_is_free,
 )
+from app.texts.client_ui import (
+    master_cancelled,
+    master_confirmed,
+    master_propose_reschedule,
+    master_rejected,
+)
 from app.utils.time import format_dd_mm, moscow_today, parse_iso
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -75,9 +81,12 @@ async def _notify_client(
     tg_id: int,
     text: str,
     kb: InlineKeyboardMarkup | None = None,
+    parse_mode: str | None = None,
 ) -> None:
     try:
-        await bot.send_message(tg_id, text, reply_markup=kb)
+        await bot.send_message(
+            tg_id, text, reply_markup=kb, parse_mode=parse_mode
+        )
     except Exception:
         pass
 
@@ -105,6 +114,41 @@ async def adm_pending(cq: CallbackQuery, db: Database) -> None:
         )
 
 
+@router.callback_query(F.data == "adm:all", IsAdmin())
+async def adm_all_list(cq: CallbackQuery, db: Database) -> None:
+    rows = await db.list_upcoming_appointments_all()
+    await cq.answer()
+    if not rows:
+        await cq.message.answer("Нет предстоящих записей.")
+        return
+    tz = ZoneInfo(_tz())
+    lines: list[str] = ["📋 Предстоящие записи:\n"]
+    kb_rows: list[list[InlineKeyboardButton]] = []
+    for ap in rows[:40]:
+        st = parse_iso(ap.start_at).astimezone(tz)
+        lines.append(
+            f"#{ap.id} · {ap.status} · {format_dd_mm(st.date())} {format_hh_mm(st)} · "
+            f"{ap.client_name} · {ap.service_name} ({ap.duration_minutes} мин)"
+        )
+        kb_rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🗑 Отменить #{ap.id}",
+                    callback_data=f"ac:{ap.id}",
+                )
+            ]
+        )
+    if len(rows) > 40:
+        lines.append(f"\n… и ещё {len(rows) - 40} (откройте «по дате» для полного списка).")
+    text = "\n".join(lines)
+    if len(text) > 4096:
+        text = text[:4090] + "…"
+    await cq.message.answer(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows),
+    )
+
+
 @router.callback_query(F.data.startswith("ap:ok:"), IsAdmin())
 async def ap_confirm(
     cq: CallbackQuery,
@@ -129,8 +173,11 @@ async def ap_confirm(
     await _notify_client(
         cq.bot,
         ap.client_tg_id,
-        f"✅ Заявка #{ap_id} подтверждена.\n"
-        f"{format_dd_mm(st.astimezone(z).date())} {format_hh_mm(st.astimezone(z))}",
+        master_confirmed(
+            ap_id,
+            format_dd_mm(st.astimezone(z).date()),
+            format_hh_mm(st.astimezone(z)),
+        ),
     )
     await resync_reminder_jobs_async(cq.bot, db, scheduler, _tz())
 
@@ -255,14 +302,14 @@ async def rs_pick_at(
     await state.clear()
     await cq.answer()
     pst = start.astimezone(tz)
-    text = (
-        f"Предложен перенос записи #{ap_id}:\n"
-        f"{format_dd_mm(pst.date())} {format_hh_mm(pst)}"
-    )
     await _notify_client(
         cq.bot,
         ap.client_tg_id,
-        text,
+        master_propose_reschedule(
+            ap_id,
+            format_dd_mm(pst.date()),
+            format_hh_mm(pst),
+        ),
         proposal_client_kb(ap_id),
     )
     await cq.message.answer("Клиенту отправлено предложение переноса.")
@@ -294,7 +341,8 @@ async def reason_enter(
         await _notify_client(
             message.bot,
             ap.client_tg_id,
-            f"❌ Заявка #{ap_id} отклонена.\nПричина: {text}",
+            master_rejected(ap_id, text),
+            parse_mode="HTML",
         )
         await message.answer("Отклонено, клиент уведомлён.")
         await resync_reminder_jobs_async(message.bot, db, scheduler, _tz())
@@ -303,7 +351,8 @@ async def reason_enter(
         await _notify_client(
             message.bot,
             ap.client_tg_id,
-            f"🗑 Запись #{ap_id} отменена мастером.\nПричина: {text}",
+            master_cancelled(ap_id, text),
+            parse_mode="HTML",
         )
         await message.answer("Отменено, клиент уведомлён.")
         await resync_reminder_jobs_async(message.bot, db, scheduler, _tz())

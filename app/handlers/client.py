@@ -14,11 +14,7 @@ from app.config import (
     SERVICES,
     load_settings,
 )
-from app.keyboards.admin import (
-    admin_menu_kb,
-    appointment_admin_kb,
-    proposal_with_cancel_kb,
-)
+from app.keyboards.admin import admin_menu_kb, appointment_admin_kb
 from app.keyboards.calendar import month_calendar_kb, parse_month_key
 from app.keyboards.client import (
     client_main_kb,
@@ -26,11 +22,43 @@ from app.keyboards.client import (
     share_phone_kb,
     skip_comment_kb,
 )
+from app.texts.client_ui import (
+    BTN_BOOK,
+    BTN_CONFIRM,
+    BTN_EDIT,
+    BTN_MY,
+    BTN_SKIP,
+    ask_comment,
+    ask_name,
+    ask_phone,
+    booking_sent,
+    calendar_intro,
+    cancelled_footer,
+    cmd_cancel_client,
+    no_records,
+    phone_day_limit,
+    phone_empty,
+    phone_invalid,
+    pick_services_hint_empty,
+    pick_services_hint_selected,
+    record_line,
+    record_reschedule_extra,
+    my_records_header,
+    name_too_short,
+    reschedule_accepted,
+    reschedule_declined,
+    slot_unavailable,
+    start_admin_hint,
+    start_welcome,
+    summary_body,
+    time_pick_intro,
+)
 from app.repository import Database
 from app.services.phone import normalize_phone
 from app.services.reminders import resync_reminder_jobs_async
 from app.services.scheduling import (
     allowed_booking_dates,
+    available_booking_dates_in_month,
     available_start_times,
     date_in_booking_window,
     format_hh_mm,
@@ -58,6 +86,76 @@ def _tz() -> str:
     return load_settings().timezone
 
 
+def _format_services_selection(selected: set[int]) -> tuple[str, int]:
+    if not selected:
+        return "", 0
+    ordered = sorted(selected)
+    names = [str(SERVICES[i]["name"]) for i in ordered]
+    dur = sum(int(SERVICES[i]["duration_minutes"]) for i in ordered)
+    return " + ".join(names), dur
+
+
+def _services_multi_kb(selected: set[int]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for i, s in enumerate(SERVICES):
+        nm = str(s["name"])[:40]
+        dm = int(s["duration_minutes"])
+        mark = "🩷" if i in selected else "🤍"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{mark} {nm} · {dm} мин",
+                    callback_data=f"svc:t:{i}",
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="✨ Готово — к дате",
+                callback_data="svc:done",
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _slots_kb(day: date, slots: list[datetime]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for dt in slots:
+        label = format_hh_mm(dt)
+        ds = day.strftime("%Y%m%d")
+        hm = dt.strftime("%H%M")
+        row.append(
+            InlineKeyboardButton(text=label, callback_data=f"st:{ds}:{hm}")
+        )
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _safe_edit_text(
+    bot,
+    chat_id: int,
+    message_id: int,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> None:
+    try:
+        await bot.edit_message_text(
+            text,
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=reply_markup,
+        )
+    except Exception:
+        pass
+
+
 async def _notify_admins(
     bot,
     db: Database,
@@ -69,42 +167,6 @@ async def _notify_admins(
             await bot.send_message(tg_id, text, reply_markup=reply_markup)
         except Exception:
             pass
-
-
-def _services_kb() -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    for i, s in enumerate(SERVICES):
-        name = str(s["name"])
-        dur = int(s["duration_minutes"])
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"{name} ({dur} мин)",
-                    callback_data=f"svc:{i}",
-                )
-            ]
-        )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def _slots_kb(day: date, slots: list[datetime]) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    row: list[InlineKeyboardButton] = []
-    for i, dt in enumerate(slots):
-        label = format_hh_mm(dt)
-        ds = day.strftime("%Y%m%d")
-        hm = dt.strftime("%H%M")
-        row.append(
-            InlineKeyboardButton(
-                text=label, callback_data=f"st:{ds}:{hm}"
-            )
-        )
-        if len(row) == 3:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 @router.message(Command("start"))
@@ -120,50 +182,92 @@ async def cmd_start(
             settings.owner_tg_id,
             message.from_user.username,
         )
-    text = (
-        "Привет! Я бот записи к мастеру маникюра.\n"
-        "Выберите действие или нажмите «📝 Записаться»."
-    )
-    await message.answer(text, reply_markup=client_main_kb())
+    await message.answer(start_welcome(), reply_markup=client_main_kb())
     if await db.is_admin(message.from_user.id):
         await message.answer(
-            "🔐 Админ-панель:",
+            start_admin_hint(),
             reply_markup=admin_menu_kb(await db.is_owner(message.from_user.id)),
         )
 
 
-@router.message(F.text == "📝 Записаться")
+@router.message(F.text == BTN_BOOK)
 async def book_start(message: Message, state: FSMContext) -> None:
     await state.set_state(ClientBooking.service)
-    await message.answer(
-        "Выберите услугу:",
-        reply_markup=_services_kb(),
+    await state.update_data(selected_svc=[])
+    msg = await message.answer(
+        pick_services_hint_empty(),
+        reply_markup=_services_multi_kb(set()),
     )
+    await state.update_data(ui_msg_id=msg.message_id)
 
 
-@router.callback_query(F.data.startswith("svc:"), StateFilter(ClientBooking.service))
-async def pick_service(
+@router.callback_query(F.data.startswith("svc:t:"), StateFilter(ClientBooking.service))
+async def svc_toggle(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    idx = int(cq.data.split(":")[1])
-    s = SERVICES[idx]
-    await state.update_data(
-        service_name=str(s["name"]),
-        duration_minutes=int(s["duration_minutes"]),
+    idx = int(cq.data.split(":")[2])
+    data = await state.get_data()
+    sel = set(data.get("selected_svc", []))
+    if idx in sel:
+        sel.remove(idx)
+    else:
+        sel.add(idx)
+    await state.update_data(selected_svc=list(sel))
+    mid = int(data.get("ui_msg_id") or cq.message.message_id)
+    name, dur = _format_services_selection(sel)
+    hint = (
+        pick_services_hint_selected(name, dur)
+        if sel
+        else pick_services_hint_empty()
     )
+    await _safe_edit_text(
+        cq.bot,
+        cq.message.chat.id,
+        mid,
+        hint,
+        _services_multi_kb(sel),
+    )
+    await cq.answer()
+
+
+@router.callback_query(F.data == "svc:done", StateFilter(ClientBooking.service))
+async def svc_done(
+    cq: CallbackQuery,
+    state: FSMContext,
+    db: Database,
+) -> None:
+    data = await state.get_data()
+    sel = set(data.get("selected_svc", []))
+    if not sel:
+        await cq.answer(
+            "🌸 Отметьте хотя бы одну услугу.", show_alert=True
+        )
+        return
+    name, dur = _format_services_selection(sel)
+    if dur <= 0:
+        await cq.answer(
+            "🤍 Что-то не так с длительностью — попробуйте снова.",
+            show_alert=True,
+        )
+        return
+    await state.update_data(service_name=name, duration_minutes=dur)
     await state.set_state(ClientBooking.calendar)
     tz = _tz()
     today = moscow_today(tz)
     first, last = allowed_booking_dates(tz)
     y, m = today.year, today.month
-    try:
-        await cq.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-    await cq.message.answer(
-        "Выберите день:",
-        reply_markup=month_calendar_kb(y, m, today, first, last),
+    avail = await available_booking_dates_in_month(db, y, m, dur, tz)
+    mid = int(data.get("ui_msg_id") or cq.message.message_id)
+    await _safe_edit_text(
+        cq.bot,
+        cq.message.chat.id,
+        mid,
+        calendar_intro(name, dur),
+        month_calendar_kb(
+            y, m, today, first, last,
+            available_dates=avail,
+        ),
     )
     await cq.answer()
 
@@ -171,16 +275,14 @@ async def pick_service(
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(
-        "Сценарий отменён. Можно начать снова: /start",
-        reply_markup=client_main_kb(),
-    )
+    await message.answer(cmd_cancel_client(), reply_markup=client_main_kb())
 
 
 @router.callback_query(F.data.startswith("cm:"), StateFilter(ClientBooking.calendar))
 async def cal_month(
     cq: CallbackQuery,
     state: FSMContext,
+    db: Database,
 ) -> None:
     if cq.data.endswith("noop"):
         await cq.answer()
@@ -190,8 +292,14 @@ async def cal_month(
     tz = _tz()
     today = moscow_today(tz)
     first, last = allowed_booking_dates(tz)
+    data = await state.get_data()
+    dur = int(data["duration_minutes"])
+    avail = await available_booking_dates_in_month(db, y, m, dur, tz)
     await cq.message.edit_reply_markup(
-        reply_markup=month_calendar_kb(y, m, today, first, last)
+        reply_markup=month_calendar_kb(
+            y, m, today, first, last,
+            available_dates=avail,
+        )
     )
     await cq.answer()
 
@@ -209,30 +317,27 @@ async def cal_day(
     day = date(y, mo, d)
     tz = _tz()
     if not date_in_booking_window(day, tz):
-        await cq.answer("Дата недоступна", show_alert=True)
+        await cq.answer(
+            "🤍 Эта дата пока недоступна.", show_alert=True
+        )
         return
     data = await state.get_data()
     dur = int(data["duration_minutes"])
     slots = await available_start_times(db, day, dur, tz)
     if not slots:
-        await cq.answer()
-        await cq.message.answer(
-            "На этот день нет свободных слотов под выбранную услугу. "
-            "Выберите другой день.",
-            reply_markup=month_calendar_kb(
-                day.year,
-                day.month,
-                moscow_today(tz),
-                allowed_booking_dates(tz)[0],
-                allowed_booking_dates(tz)[1],
-            ),
+        await cq.answer(
+            "🥺 На этот день местечек не осталось.", show_alert=True
         )
         return
     await state.update_data(day_iso=day.isoformat())
     await state.set_state(ClientBooking.time_pick)
-    await cq.message.answer(
-        f"Доступное время на {format_dd_mm(day)}:",
-        reply_markup=_slots_kb(day, slots),
+    mid = int(data.get("ui_msg_id") or cq.message.message_id)
+    await _safe_edit_text(
+        cq.bot,
+        cq.message.chat.id,
+        mid,
+        time_pick_intro(data["service_name"], format_dd_mm(day)),
+        _slots_kb(day, slots),
     )
     await cq.answer()
 
@@ -256,7 +361,14 @@ async def pick_time(
         end_iso=end.isoformat(),
     )
     await state.set_state(ClientBooking.name)
-    await cq.message.answer("Введите ваше имя:")
+    mid = int(data.get("ui_msg_id") or cq.message.message_id)
+    await _safe_edit_text(
+        cq.bot,
+        cq.message.chat.id,
+        mid,
+        ask_name(),
+        reply_markup=None,
+    )
     await cq.answer()
 
 
@@ -264,14 +376,11 @@ async def pick_time(
 async def enter_name(message: Message, state: FSMContext) -> None:
     name = (message.text or "").strip()
     if len(name) < 2:
-        await message.answer("Имя слишком короткое. Введите ещё раз.")
+        await message.answer(name_too_short())
         return
     await state.update_data(client_name=name)
     await state.set_state(ClientBooking.phone)
-    await message.answer(
-        "Укажите телефон текстом или нажмите кнопку ниже.",
-        reply_markup=share_phone_kb(),
-    )
+    await message.answer(ask_phone(), reply_markup=share_phone_kb())
 
 
 @router.message(StateFilter(ClientBooking.phone), F.contact)
@@ -282,10 +391,7 @@ async def phone_contact(
     phone = message.contact.phone_number or ""
     await state.update_data(phone_raw=phone)
     await state.set_state(ClientBooking.comment)
-    await message.answer(
-        "Комментарий к записи (необязательно):",
-        reply_markup=skip_comment_kb(),
-    )
+    await message.answer(ask_comment(), reply_markup=skip_comment_kb())
 
 
 @router.message(StateFilter(ClientBooking.phone), F.text)
@@ -295,17 +401,14 @@ async def phone_text(
 ) -> None:
     raw = (message.text or "").strip()
     if not raw:
-        await message.answer("Введите номер телефона.")
+        await message.answer(phone_empty())
         return
     await state.update_data(phone_raw=raw)
     await state.set_state(ClientBooking.comment)
-    await message.answer(
-        "Комментарий к записи (необязательно):",
-        reply_markup=skip_comment_kb(),
-    )
+    await message.answer(ask_comment(), reply_markup=skip_comment_kb())
 
 
-@router.message(StateFilter(ClientBooking.comment), F.text == "⏭ Пропустить")
+@router.message(StateFilter(ClientBooking.comment), F.text == BTN_SKIP)
 async def comment_skip(
     message: Message,
     state: FSMContext,
@@ -335,28 +438,33 @@ async def _show_summary(message: Message, state: FSMContext) -> None:
     dstr = format_dd_mm(day)
     tstr = format_hh_mm(st.astimezone(tz))
     phone = normalize_phone(data.get("phone_raw", ""))
-    lines = [
-        "Проверьте заявку:",
-        f"Услуга: {data['service_name']} ({data['duration_minutes']} мин)",
-        f"Дата и время: {dstr} {tstr}",
-        f"Имя: {data['client_name']}",
-        f"Телефон: {phone or data.get('phone_raw', '')}",
-    ]
-    if data.get("comment"):
-        lines.append(f"Комментарий: {data['comment']}")
-    await message.answer("\n".join(lines), reply_markup=confirm_kb())
+    text = summary_body(
+        data["service_name"],
+        int(data["duration_minutes"]),
+        dstr,
+        tstr,
+        data["client_name"],
+        phone or data.get("phone_raw", ""),
+        data.get("comment"),
+    )
+    await message.answer(text, reply_markup=confirm_kb())
 
 
-@router.message(StateFilter(ClientBooking.confirm), F.text == "✏️ Изменить")
+@router.message(StateFilter(ClientBooking.confirm), F.text == BTN_EDIT)
 async def confirm_edit(
     message: Message,
     state: FSMContext,
 ) -> None:
     await state.set_state(ClientBooking.service)
-    await message.answer("Выберите услугу:", reply_markup=_services_kb())
+    await state.update_data(selected_svc=[])
+    msg = await message.answer(
+        pick_services_hint_empty(),
+        reply_markup=_services_multi_kb(set()),
+    )
+    await state.update_data(ui_msg_id=msg.message_id)
 
 
-@router.message(StateFilter(ClientBooking.confirm), F.text == "✅ Подтвердить")
+@router.message(StateFilter(ClientBooking.confirm), F.text == BTN_CONFIRM)
 async def confirm_submit(
     message: Message,
     state: FSMContext,
@@ -373,15 +481,13 @@ async def confirm_submit(
         en = en.replace(tzinfo=tz)
     phone_norm = normalize_phone(data.get("phone_raw", ""))
     if len(phone_norm) < 11:
-        await message.answer("Некорректный телефон. Начните заново: /start")
+        await message.answer(phone_invalid())
         await state.clear()
         return
 
     ok, reason = await slot_is_free(db, st, en)
     if not ok:
-        await message.answer(
-            f"Слот больше недоступен ({reason}). Начните запись снова: /start"
-        )
+        await message.answer(slot_unavailable(reason))
         await state.clear()
         return
 
@@ -390,10 +496,7 @@ async def confirm_submit(
         phone_norm, day, tz_name
     )
     if cnt >= MAX_APPOINTMENTS_PER_PHONE_PER_DAY:
-        await message.answer(
-            "На этот день у вас уже максимум записей (2) на этот номер. "
-            "Выберите другой день или /start."
-        )
+        await message.answer(phone_day_limit())
         await state.clear()
         return
 
@@ -412,10 +515,7 @@ async def confirm_submit(
         client_comment=data.get("comment"),
     )
     await state.clear()
-    await message.answer(
-        "Заявка отправлена. Ожидайте подтверждения мастера.",
-        reply_markup=client_main_kb(),
-    )
+    await message.answer(booking_sent(), reply_markup=client_main_kb())
     card = (
         f"🆕 Новая заявка #{ap_id}\n"
         f"{data['client_name']} · {phone_norm}\n"
@@ -430,7 +530,46 @@ async def confirm_submit(
     )
 
 
-@router.message(F.text == "📋 Мои записи")
+def _my_records_kb(rows: list) -> InlineKeyboardMarkup | None:
+    ib: list[list[InlineKeyboardButton]] = []
+    for ap in rows:
+        aid = str(ap.id)
+        if ap.status == "RESCHEDULE_PROPOSED" and ap.proposed_start_at:
+            ib.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"🩷 Принять #{aid}",
+                        callback_data=f"rs:ok:{aid}",
+                    ),
+                    InlineKeyboardButton(
+                        text=f"🤍 Отказаться #{aid}",
+                        callback_data=f"rs:no:{aid}",
+                    ),
+                ]
+            )
+            ib.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"🥀 Отменить #{aid}",
+                        callback_data=f"cx:{aid}",
+                    )
+                ]
+            )
+        elif ap.status in ("PENDING", "CONFIRMED"):
+            ib.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"🥀 Отменить #{aid}",
+                        callback_data=f"cx:{aid}",
+                    )
+                ]
+            )
+    if not ib:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=ib[:95])
+
+
+@router.message(F.text == BTN_MY)
 async def my_records(
     message: Message,
     db: Database,
@@ -438,39 +577,31 @@ async def my_records(
     uid = message.from_user.id
     rows = await db.client_future_appointments(uid)
     if not rows:
-        await message.answer("У вас нет активных записей.")
+        await message.answer(no_records())
         return
     tz = ZoneInfo(_tz())
+    lines: list[str] = [my_records_header(), ""]
     for ap in rows:
         st = parse_iso(ap.start_at).astimezone(tz)
-        d = st.date()
-        extra = ""
+        line = record_line(
+            ap.id,
+            ap.status,
+            format_dd_mm(st.date()),
+            format_hh_mm(st),
+            ap.service_name,
+        )
         if ap.status == "RESCHEDULE_PROPOSED" and ap.proposed_start_at:
             pst = parse_iso(ap.proposed_start_at).astimezone(tz)
-            extra = (
-                f"\n\nПредложен перенос на {format_dd_mm(pst.date())} "
-                f"{format_hh_mm(pst)}"
+            line += record_reschedule_extra(
+                format_dd_mm(pst.date()),
+                format_hh_mm(pst),
             )
-        kb = None
-        if ap.status == "RESCHEDULE_PROPOSED" and ap.proposed_start_at:
-            kb = proposal_with_cancel_kb(ap.id)
-        elif ap.status in ("PENDING", "CONFIRMED"):
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="❌ Отменить",
-                            callback_data=f"cx:{ap.id}",
-                        )
-                    ]
-                ]
-            )
-        await message.answer(
-            f"#{ap.id} · {ap.status}\n"
-            f"{format_dd_mm(d)} {format_hh_mm(st)} — {ap.service_name}"
-            f"{extra}",
-            reply_markup=kb,
-        )
+        lines.append(line)
+    text = "\n".join(lines)
+    if len(text) > 4096:
+        text = text[:4090] + "…"
+    kb = _my_records_kb(rows)
+    await message.answer(text, reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("cx:"))
@@ -487,9 +618,15 @@ async def client_cancel(
     await db.update_status(
         ap_id, "CANCELLED", admin_reason="отмена клиентом", clear_proposed=True
     )
-    await cq.answer("Отменено")
-    await cq.message.edit_reply_markup(reply_markup=None)
-    await cq.message.answer("Запись отменена.")
+    await cq.answer("🤍 Готово")
+    prev = (cq.message.text or "").strip()
+    try:
+        await cq.message.edit_text(
+            prev + cancelled_footer(),
+            reply_markup=None,
+        )
+    except Exception:
+        await cq.message.edit_reply_markup(reply_markup=None)
     tz = ZoneInfo(_tz())
     st = parse_iso(ap.start_at).astimezone(tz)
     text = (
@@ -527,8 +664,13 @@ async def accept_reschedule(
         return
     await db.accept_reschedule(ap_id)
     await cq.answer()
-    await cq.message.edit_reply_markup(reply_markup=None)
-    await cq.message.answer("Перенос подтверждён. Ждём вас!")
+    try:
+        await cq.message.edit_text(
+            reschedule_accepted(),
+            reply_markup=None,
+        )
+    except Exception:
+        await cq.message.edit_reply_markup(reply_markup=None)
     await resync_reminder_jobs_async(
         cq.bot, db, scheduler, tz_name
     )
@@ -555,8 +697,13 @@ async def decline_reschedule(
         clear_proposed=True,
     )
     await cq.answer()
-    await cq.message.edit_reply_markup(reply_markup=None)
-    await cq.message.answer("Перенос отклонён.")
+    try:
+        await cq.message.edit_text(
+            reschedule_declined(),
+            reply_markup=None,
+        )
+    except Exception:
+        await cq.message.edit_reply_markup(reply_markup=None)
     await _notify_admins(
         cq.bot,
         db,
