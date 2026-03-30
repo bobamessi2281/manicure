@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup
+from aiogram.types import CallbackQuery, FSInputFile, Message, ReplyKeyboardMarkup
 
 from app.config import (
     MAX_APPOINTMENTS_PER_PHONE_PER_DAY,
@@ -81,6 +82,8 @@ class ClientBooking(StatesGroup):
 
 
 router = Router(name="client")
+
+_WELCOME_PHOTO = Path(__file__).resolve().parent.parent / "assets" / "welcome.png"
 
 
 @router.callback_query(F.data == "bk:start")
@@ -208,7 +211,14 @@ async def cmd_start(
             settings.owner_tg_id,
             message.from_user.username,
         )
-    await message.answer(start_welcome(), reply_markup=client_main_kb())
+    if _WELCOME_PHOTO.is_file():
+        await message.answer_photo(
+            FSInputFile(_WELCOME_PHOTO),
+            caption=start_welcome(),
+            reply_markup=client_main_kb(),
+        )
+    else:
+        await message.answer(start_welcome(), reply_markup=client_main_kb())
     if await db.is_admin(message.from_user.id):
         await message.answer(
             start_admin_hint(),
