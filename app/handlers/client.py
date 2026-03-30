@@ -7,7 +7,7 @@ from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup
 
 from app.config import (
     MAX_APPOINTMENTS_PER_PHONE_PER_DAY,
@@ -83,6 +83,30 @@ class ClientBooking(StatesGroup):
 router = Router(name="client")
 
 
+@router.callback_query(F.data == "bk:start")
+async def book_from_refresh(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    await state.clear()
+    await state.set_state(ClientBooking.service)
+    await state.update_data(selected_svc=[])
+    try:
+        await cq.message.edit_text(
+            pick_services_hint_empty(),
+            reply_markup=_services_multi_kb(set()),
+        )
+        await state.update_data(ui_msg_id=cq.message.message_id)
+    except Exception:
+        msg = await cq.bot.send_message(
+            cq.message.chat.id,
+            pick_services_hint_empty(),
+            reply_markup=_services_multi_kb(set()),
+        )
+        await state.update_data(ui_msg_id=msg.message_id)
+    await cq.answer()
+
+
 def _tz() -> str:
     return load_settings().timezone
 
@@ -144,7 +168,7 @@ async def _safe_edit_text(
     chat_id: int,
     message_id: int,
     text: str,
-    reply_markup: InlineKeyboardMarkup | None = None,
+    reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | None = None,
 ) -> None:
     try:
         await bot.edit_message_text(
@@ -345,6 +369,7 @@ async def cal_day(
 async def pick_time(
     cq: CallbackQuery,
     state: FSMContext,
+    db: Database,
 ) -> None:
     _, ds, hm = cq.data.split(":")
     y, m, d = int(ds[:4]), int(ds[4:6]), int(ds[6:8])
@@ -359,15 +384,29 @@ async def pick_time(
         start_iso=start.isoformat(),
         end_iso=end.isoformat(),
     )
-    await state.set_state(ClientBooking.name)
     mid = int(data.get("ui_msg_id") or cq.message.message_id)
-    await _safe_edit_text(
-        cq.bot,
-        cq.message.chat.id,
-        mid,
-        ask_name(),
-        reply_markup=None,
-    )
+    cid = cq.from_user.id
+    prof = await db.get_client_profile(cid)
+    if prof is not None:
+        raw = prof.phone_raw or prof.client_phone_norm
+        await state.update_data(client_name=prof.client_name, phone_raw=raw)
+        await state.set_state(ClientBooking.comment)
+        await _safe_edit_text(
+            cq.bot,
+            cq.message.chat.id,
+            mid,
+            ask_comment(),
+            reply_markup=skip_comment_kb(),
+        )
+    else:
+        await state.set_state(ClientBooking.name)
+        await _safe_edit_text(
+            cq.bot,
+            cq.message.chat.id,
+            mid,
+            ask_name(),
+            reply_markup=None,
+        )
     await cq.answer()
 
 
@@ -446,7 +485,25 @@ async def _show_summary(message: Message, state: FSMContext) -> None:
         phone or data.get("phone_raw", ""),
         data.get("comment"),
     )
-    await message.answer(text, reply_markup=confirm_kb())
+    mid = data.get("ui_msg_id")
+    chat_id = message.chat.id
+    if mid is not None and message.bot:
+        try:
+            await message.bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=int(mid),
+                reply_markup=confirm_kb(),
+            )
+            await state.update_data(summary_msg_id=int(mid))
+            return
+        except Exception:
+            pass
+    msg = await message.answer(text, reply_markup=confirm_kb())
+    await state.update_data(
+        summary_msg_id=msg.message_id,
+        ui_msg_id=msg.message_id,
+    )
 
 
 @router.message(StateFilter(ClientBooking.confirm), F.text == BTN_EDIT)
@@ -499,6 +556,9 @@ async def confirm_submit(
         await state.clear()
         return
 
+    smid = data.get("summary_msg_id") or data.get("ui_msg_id")
+    chat_id = message.chat.id
+
     uname = message.from_user.username if message.from_user else None
     cid = message.from_user.id
     ap_id = await db.insert_appointment(
@@ -513,8 +573,26 @@ async def confirm_submit(
         status="PENDING",
         client_comment=data.get("comment"),
     )
+    pr = data.get("phone_raw") or phone_norm
+    await db.upsert_client_profile(
+        cid,
+        data["client_name"],
+        phone_norm,
+        pr if isinstance(pr, str) else str(pr),
+    )
     await state.clear()
-    await message.answer(booking_sent(), reply_markup=client_main_kb())
+    if smid is not None and message.bot:
+        try:
+            await message.bot.edit_message_text(
+                booking_sent(),
+                chat_id=chat_id,
+                message_id=int(smid),
+                reply_markup=client_main_kb(),
+            )
+        except Exception:
+            await message.answer(booking_sent(), reply_markup=client_main_kb())
+    else:
+        await message.answer(booking_sent(), reply_markup=client_main_kb())
     card = (
         f"🆕 Новая заявка #{ap_id}\n"
         f"{data['client_name']} · {phone_norm}\n"

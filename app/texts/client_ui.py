@@ -228,6 +228,17 @@ def master_propose_reschedule(ap_id: int, day_s: str, time_s: str) -> str:
     )
 
 
+# ——— Напоминание «пора обновить маникюр» (30 дней после визита) ———
+
+
+def refresh_manicure_reminder(service_name: str, visit_day: str) -> str:
+    return (
+        "🤍 Прошло 30 дней с вашего визита.\n"
+        f"💅 {service_name} · {visit_day}\n\n"
+        "🌸 Пора обновить маникюр — будем рады видеть вас снова!"
+    )
+
+
 # ——— Напоминания ———
 
 

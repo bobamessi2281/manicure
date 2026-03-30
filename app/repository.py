@@ -29,6 +29,15 @@ class AppointmentRow:
     updated_at: str
     reminder_24_sent: int
     reminder_12_sent: int
+    refresh_30_sent: int
+
+
+@dataclass
+class ClientProfile:
+    tg_id: int
+    client_name: str
+    client_phone_norm: str
+    phone_raw: str | None
 
 
 def _dt_to_utc_z(dt: datetime) -> str:
@@ -58,7 +67,15 @@ def _row_to_appt(r: aiosqlite.Row) -> AppointmentRow:
         updated_at=r["updated_at"],
         reminder_24_sent=r["reminder_24_sent"],
         reminder_12_sent=r["reminder_12_sent"],
+        refresh_30_sent=_col_int(r, "refresh_30_sent"),
     )
+
+
+def _col_int(r: aiosqlite.Row, key: str) -> int:
+    try:
+        return int(r[key])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return 0
 
 
 class Database:
@@ -68,7 +85,18 @@ class Database:
     async def init(self) -> None:
         async with aiosqlite.connect(self.path) as db:
             await db.executescript(SCHEMA_SQL)
+            await self._migrate_schema(db)
             await db.commit()
+
+    async def _migrate_schema(self, db: Any) -> None:
+        try:
+            await db.execute(
+                """
+                ALTER TABLE appointments ADD COLUMN refresh_30_sent INTEGER NOT NULL DEFAULT 0
+                """
+            )
+        except Exception:
+            pass
 
     async def ensure_owner(self, tg_id: int, username: str | None) -> None:
         async with aiosqlite.connect(self.path) as db:
@@ -224,7 +252,7 @@ class Database:
                 await db.execute(
                     """
                     UPDATE appointments SET start_at = ?, end_at = ?, updated_at = ?,
-                    reminder_24_sent = 0, reminder_12_sent = 0
+                    reminder_24_sent = 0, reminder_12_sent = 0, refresh_30_sent = 0
                     WHERE id = ?
                     """,
                     (sa, ea, now, appt_id),
@@ -281,7 +309,8 @@ class Database:
                     status = 'CONFIRMED',
                     updated_at = ?,
                     reminder_24_sent = 0,
-                    reminder_12_sent = 0
+                    reminder_12_sent = 0,
+                    refresh_30_sent = 0
                 WHERE id = ?
                 """,
                 (now, appt_id),
@@ -331,6 +360,70 @@ class Database:
                     (1 if r12 else 0, appt_id),
                 )
             await db.commit()
+
+    async def set_refresh_30_sent(self, appt_id: int) -> None:
+        now = utc_now_iso()
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute(
+                """
+                UPDATE appointments SET refresh_30_sent = 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (now, appt_id),
+            )
+            await db.commit()
+
+    async def get_client_profile(self, tg_id: int) -> ClientProfile | None:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM client_profiles WHERE tg_id = ?", (tg_id,)
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            return ClientProfile(
+                tg_id=int(row["tg_id"]),
+                client_name=str(row["client_name"]),
+                client_phone_norm=str(row["client_phone_norm"]),
+                phone_raw=row["phone_raw"],
+            )
+
+    async def upsert_client_profile(
+        self,
+        tg_id: int,
+        client_name: str,
+        client_phone_norm: str,
+        phone_raw: str | None,
+    ) -> None:
+        now = utc_now_iso()
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute(
+                """
+                INSERT INTO client_profiles (
+                    tg_id, client_name, client_phone_norm, phone_raw, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(tg_id) DO UPDATE SET
+                    client_name = excluded.client_name,
+                    client_phone_norm = excluded.client_phone_norm,
+                    phone_raw = excluded.phone_raw,
+                    updated_at = excluded.updated_at
+                """,
+                (tg_id, client_name, client_phone_norm, phone_raw, now),
+            )
+            await db.commit()
+
+    async def list_confirmed_for_refresh_30(self) -> list[AppointmentRow]:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT * FROM appointments
+                WHERE status = 'CONFIRMED' AND refresh_30_sent = 0
+                """
+            )
+            rows = await cur.fetchall()
+            return [_row_to_appt(r) for r in rows]
 
     async def list_pending(self) -> list[AppointmentRow]:
         async with aiosqlite.connect(self.path) as db:

@@ -32,7 +32,16 @@ CREATE TABLE IF NOT EXISTS appointments (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     reminder_24_sent INTEGER NOT NULL DEFAULT 0,
-    reminder_12_sent INTEGER NOT NULL DEFAULT 0
+    reminder_12_sent INTEGER NOT NULL DEFAULT 0,
+    refresh_30_sent INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS client_profiles (
+    tg_id INTEGER PRIMARY KEY,
+    client_name TEXT NOT NULL,
+    client_phone_norm TEXT NOT NULL,
+    phone_raw TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS blocked_windows (
